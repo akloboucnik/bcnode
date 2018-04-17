@@ -8380,13 +8380,13 @@ nan@*, nan@^2.0.0, nan@^2.0.5, nan@^2.0.8, nan@^2.0.9, nan@^2.10.0, nan@^2.2.1, 
   version "2.10.0"
   resolved "https://registry.yarnpkg.com/nan/-/nan-2.10.0.tgz#96d0cd610ebd58d4b4de9cc0c6828cda99c7548f"
 
+nan@2.6.2, nan@~2.6.1:
+  version "2.6.2"
+  resolved "https://registry.yarnpkg.com/nan/-/nan-2.6.2.tgz#e4ff34e6c95fdfb5aecc08de6596f43605a7db45"
+
 nan@~2.5.0:
   version "2.5.1"
   resolved "https://registry.yarnpkg.com/nan/-/nan-2.5.1.tgz#d5b01691253326a97a2bbee9e61c55d8d60351e2"
-
-nan@~2.6.1:
-  version "2.6.2"
-  resolved "https://registry.yarnpkg.com/nan/-/nan-2.6.2.tgz#e4ff34e6c95fdfb5aecc08de6596f43605a7db45"
 
 nan@~2.8.0:
   version "2.8.0"
@@ -10498,6 +10498,12 @@ rlp-encoding@^3.0.0:
 rlp@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/rlp/-/rlp-2.0.0.tgz#9db384ff4b89a8f61563d92395d8625b18f3afb0"
+
+rocksdb-node@1.7.2:
+  version "1.7.2"
+  resolved "https://registry.yarnpkg.com/rocksdb-node/-/rocksdb-node-1.7.2.tgz#5546dd1c5c1902173e40c8e22787ec7f4f034d67"
+  dependencies:
+    nan "2.6.2"
 
 rocksdb@^2.0.0:
   version "2.0.0"

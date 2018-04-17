@@ -6,20 +6,25 @@
  *
  * @flow
  */
+import type { Logger } from 'winston'
+const process = require('process')
+const RocksDb = require('rocksdb-node')
 
-const RocksDb = require('rocksdb')
-
+const { getLogger } = require('../logger/index')
 const { serialize, deserialize } = require('./codec')
 
 /**
  * Unified persistence interface
  */
 export default class PersistenceRocksDb {
-  _db: RocksDb; // eslint-disable-line no-undef
+  _location: string; // eslint-disable-line no-undef
+  _logger: Logger; // eslint-disable-line no-undef
+  _db: ?RocksDb; // eslint-disable-line no-undef
   _isOpen: boolean; // eslint-disable-line no-undef
 
   constructor (location: string = '_data') {
-    this._db = new RocksDb(location)
+    this._location = location
+    this._logger = getLogger(__filename)
     this._isOpen = false
   }
 
@@ -35,18 +40,15 @@ export default class PersistenceRocksDb {
    * Open database
    * @param opts
    */
-  open (opts: Object = {}): Promise<*> {
-    return new Promise((resolve, reject) => {
-      this.db.open(opts, (err) => {
-        if (err) {
-          this._isOpen = false
-          return reject(err)
-        }
-
-        this._isOpen = true
-        return resolve(true)
-      })
-    })
+  open (opts: Object = { create_if_missing: true }) {
+    try {
+      this._db = RocksDb.open(opts, this._location)
+      this._isOpen = true
+      this._logger.debug(`Successfuly opened rocksDb in location ${this._location}`)
+    } catch (e) {
+      this._logger.error(`Cannot open rocksDb in location ${this._location}`)
+      process.exit(2)
+    }
   }
 
   /**
@@ -72,15 +74,16 @@ export default class PersistenceRocksDb {
    */
   put (key: string, value: any, opts: Object = {}): Promise<*> {
     const serialized = serialize(value)
-    return new Promise((resolve, reject) => {
-      this.db.put(key, serialized, opts, (err) => {
-        if (err) {
-          return reject(err)
-        }
-
-        return resolve(true)
-      })
-    })
+    this.db.put({ sync: true }, key, serialized)
+    // return new Promise((resolve, reject) => {
+    //   this.db.put(key, serialized, (err) => {
+    //     if (err) {
+    //       return reject(err)
+    //     }
+    //
+    //     return resolve(true)
+    //   })
+    // })
   }
 
   /**
@@ -88,20 +91,27 @@ export default class PersistenceRocksDb {
    * @param key
    * @param opts
    */
-  get (key: string, opts: Object = { asBuffer: true }): Promise<Object> {
-    return new Promise((resolve, reject) => {
-      this.db.get(key, opts, (err, value) => {
-        if (err) {
-          return reject(new Error(`${err.message} - ${key}`))
-        }
-        try {
-          const deserialized = deserialize(value)
-          return resolve(deserialized)
-        } catch (e) {
-          return reject(new Error(`Could not deserialize value`))
-        }
-      })
-    })
+  get (key: string, opts: Object = { buffer: true }): ?Object|Error {
+    const value = this.db.get(opts, key)
+    if (value === null) {
+      return null
+    }
+    const deserialized = deserialize(value)
+    return deserialized
+    // return new Promise((resolve, reject) => {
+    //   this.db.get(opts, key, (err, value) => {
+    //     if (err) {
+    //       return reject(new Error(`${err.message} - ${key}`))
+    //     }
+    //     try {
+    //       const deserialized = deserialize(value)
+    //       return resolve(deserialized)
+    //     } catch (e) {
+    //       const {inspect} = require('util')
+    //       return reject(new Error(`Could not deserialize value, key ${key}, ${inspect(value)}`))
+    //     }
+    //   })
+    // })
   }
 
   /**

@@ -216,15 +216,20 @@ export function distance (a: string, b: string) {
 export function mine (work: string, miner: string, merkleRoot: string, threshold: number) {
   threshold = new BN(threshold, 16)
   let result
+  let iter = 0
 
   // console.log('mining for threshold: ' + threshold)
 
   // TODO: @pm check
   while (true) {
   // if (i < 2) {
+    if (iter >= 1000000) {
+      throw new Error(`Iter: ${iter}`)
+    }
     let nonce = String(Math.random()) // random string
     let nonceHash = blake2bl(nonce)
     result = distance(work, blake2bl(miner + merkleRoot + nonceHash))
+    iter += 1
     if (new BN(result, 16).gt(new BN(threshold, 16)) === true) {
       return {
         distance: result,
@@ -274,7 +279,7 @@ export function getMinimumDifficulty (childChainCount: number): BN {
 }
 
 // TODO rename arguments to better describe data
-export function getNewPreExpDifficulty (previousBlock: BcBlock, parentShareDiff: BN, minimumDiffShare: BN, childrenPreviousBlocks: Block[], childrenCurrentBlocks: Block[]) {
+export function getNewPreExpDifficulty (currentTime: number, previousBlock: BcBlock, parentShareDiff: BN, minimumDiffShare: BN, childrenPreviousBlocks: Block[], childrenCurrentBlocks: Block[]) {
   let handicap = 0
   // TODO reduce pairs with accum start = false
   const timestampEquality = childrenCurrentBlocks.map((childBlock, idx) => compareTimestamps(childBlock, childrenCurrentBlocks[idx]))
@@ -285,10 +290,10 @@ export function getNewPreExpDifficulty (previousBlock: BcBlock, parentShareDiff:
   }
 
   const blockColliderShareDiff = getDiff(
-    (Date.now() / 1000) << 0, // TODO inject current date
+    currentTime,
     previousBlock.getTimestamp(),
-    minimumDiffShare,
     parentShareDiff,
+    minimumDiffShare,
     handicap
   )
 
@@ -306,10 +311,10 @@ export function getNewPreExpDifficulty (previousBlock: BcBlock, parentShareDiff:
   newDifficulty.add(blockColliderShareDiff) // Add the Block Collider's chain to the values
 
   const preExpDiff = getDiff(
-    (Date.now() / 1000) << 0,
+    currentTime,
     previousBlock.getTimestamp(),
-    MINIMUM_DIFFICULTY,
-    newDifficulty
+    newDifficulty,
+    MINIMUM_DIFFICULTY
   ) // Calculate the final pre-singularity difficulty adjustment
 
   return preExpDiff
@@ -331,13 +336,14 @@ export function prepareWork (previousBlock: BcBlock, childrenCurrentBlocks: Bloc
   return work
 }
 
-export function prepareNewBlock (previousBlock: BcBlock, childrenPreviousBlocks: Block[], childrenCurrentBlocks: Block[], newTransactions: BcTransaction[], minerAddress: string): BcBlock {
+export function prepareNewBlock (currentTimestamp: number, previousBlock: BcBlock, childrenPreviousBlocks: Block[], childrenCurrentBlocks: Block[], newTransactions: BcTransaction[], minerAddress: string): BcBlock {
   const blockHashes = getChildrenBlocksHashes(childrenCurrentBlocks)
   const newChainRoot = getChildrenRootHash(blockHashes)
 
   const parentShareDiff = getParentShareDiff(previousBlock.getDifficulty(), blockHashes.length)
   const minimumDiffShare = getMinimumDifficulty(blockHashes.length)
   const preExpDiff = getNewPreExpDifficulty(
+    currentTimestamp,
     previousBlock,
     parentShareDiff,
     minimumDiffShare,

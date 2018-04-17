@@ -7,6 +7,7 @@
  * @flow
  */
 import type { Logger } from 'winston'
+const process = require('process')
 
 const { Null } = require('../../../protos/core_pb')
 const logging: Logger = require('../../../logger')
@@ -17,25 +18,38 @@ export default function (context: Object, call: Object, callback: Function) {
   const block = call.request
   const blockchain = block.getBlockchain()
   const key = `${blockchain}.block.latest`
+  callback(null, new Null())
+  log.debug(`Callback sent for ${blockchain}, hash: ${block.getHash()}`)
 
   const { server: { engine: { persistence } } } = context
-  persistence.get(key).then(oldLatest => {
-    // there is older latest block, make previous from it
-    log.debug(`We have old latest ${key}`)
-    return persistence.put(`${blockchain}.block.previous`, oldLatest).then(() => {
-      log.debug(`Stored previous for ${blockchain}`)
-      persistence.put(key, block).then(() => {
-        log.debug(`Stored latest for ${blockchain}`)
-        callback(null, new Null())
-      })
+  try {
+    persistence.put(key, block)
+    log.debug(`Stored latest for ${blockchain}, hash: ${block.getHash()}`)
+    process.nextTick(() => {
+      log.debug('Emitting from collectBlock')
+      context.emitter.emit('collectBlock', { block })
+      log.debug('Emitted from collectBlock')
     })
-  }, _ => { // there is no older latest block, just store
-    log.debug(`Did not have latest for ${blockchain}`)
-    return persistence.put(key, block).then(() => {
-      log.debug(`Stored latest for ${blockchain}`)
-      callback(null, new Null())
-    })
-  }).then(() => {
-    context.emitter.emit('collectBlock', { block })
-  })
+  } catch (e) {
+    log.error(`Error while handling collectBlock, reason: ${e.message}`)
+  }
+  // persistence.get(key).then(oldLatest => {
+  //   // there is older latest block, make previous from it
+  //   log.debug(`We have old latest ${key}`)
+  //   return persistence.put(`${blockchain}.block.previous`, oldLatest).then(() => {
+  //     log.debug(`Stored previous for ${blockchain}`)
+  //     return persistence.put(key, block).then(() => {
+  //       log.debug(`Stored latest for ${blockchain}`)
+  //       callback(null, new Null())
+  //     })
+  //   })
+  // }, _ => { // there is no older latest block, just store
+  //   log.debug(`Did not have latest for ${blockchain}`)
+  //   return persistence.put(key, block).then(() => {
+  //     log.debug(`Stored latest for ${blockchain}`)
+  //     callback(null, new Null())
+  //   })
+  // }).then(() => {
+  //   context.emitter.emit('collectBlock', { block })
+  // })
 }
