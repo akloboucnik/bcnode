@@ -44,6 +44,8 @@ const {
 
 const { blake2bl } = require('../utils/crypto')
 const { Block, BcBlock, BcTransaction, ChildBlockHeader } = require('../protos/core_pb')
+const { getLogger } = require('../logger/index')
+const log = getLogger(__filename)
 
 const MINIMUM_DIFFICULTY = new BN(11801972029393, 16)
 
@@ -253,9 +255,17 @@ export function distance (a: string, b: string): number {
 export function mine (currentTimestamp: number, work: string, miner: string, merkleRoot: string, threshold: number): { distance: number, nonce: string } {
   threshold = new BN(threshold, 16)
   let result
+  const MAX_MINING_PERIOD = 10 * 1000 // 10s
+  const start = Date.now()
+  let iterCnt = 0
+  let stillRun = true
 
   // TODO: @pm check
-  while (true) {
+  while (stillRun) {
+    if (iterCnt % 30000 === 0) {
+      // $FlowFixMe
+      log.debug(`Mining diff: ${Date.now() - start}`)
+    }
     let nonce = String(Math.random()) // random string
     let nonceHash = blake2bl(nonce)
     result = distance(work, blake2bl(miner + merkleRoot + nonceHash + currentTimestamp))
@@ -264,6 +274,13 @@ export function mine (currentTimestamp: number, work: string, miner: string, mer
         distance: result,
         nonce: nonce
       }
+    }
+    iterCnt = iterCnt + 1
+    stillRun = Date.now() - start < MAX_MINING_PERIOD
+    if (stillRun === false) {
+      // $FlowFixMe
+      // log.error('stillRun false')
+      throw Error(`Mining took longer than ${MAX_MINING_PERIOD / 1000}s`)
     }
   }
 }

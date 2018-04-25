@@ -9,6 +9,7 @@
 
 const { EventEmitter } = require('events')
 const { equals, all, values, fromPairs } = require('ramda')
+const Threads = require('webworker-threads')
 
 const config = require('../../config/config')
 const { debugSaveObject } = require('../debug')
@@ -42,6 +43,7 @@ export default class Engine {
   _collectedBlocks: Object; // eslint-disable-line no-undef
   _canMine: bool; // eslint-disable-line no-undef
   _mining: bool;
+  _workerThread: Object;
 
   constructor (logger: Object, opts: { rovers: string[], minerKey: string}) {
     this._logger = logging.getLogger(__filename)
@@ -60,6 +62,7 @@ export default class Engine {
     }
     this._canMine = false
     this._mining = false
+    this._workerThread = Threads.create()
   }
 
   /**
@@ -248,20 +251,35 @@ export default class Engine {
 
       this._logger.debug(`Mining with work: "${work}", difficutly: ${newBlock.getDifficulty()}, ${JSON.stringify(this._collectedBlocks, null, 2)}`)
 
-      const solution = mine(
-        currentTimestamp,
-        work,
-        this._minerKey,
-        newBlock.getMerkleRoot(),
-        newBlock.getDifficulty()
-      )
+      // function worker () {
+      //   const solution = mine(
+      //     currentTimestamp,
+      //     work,
+      //     minerKey,
+      //     merkleRoot,
+      //     difficulty
+      //   )
+      //   // $FlowFixMe
+      //   thread.emit('data', solution) // eslint-disable-line no-undef
+      // }
+      // `mine(${currentTimestamp}, "${work}", "${this._minerKey}", "${newBlock.getMerkleRoot()}", ${newBlock.getDifficulty()})`
+      const path = require('path')
+      this._workerThread.on('data', (err, solution) => {
+        if (err) {
+          this._logger.warn(`Worker thread ended with error, reason: ${err.message}`)
+        } else {
+          this._logger.debug(`Worker thread done, result ${JSON.stringify(solution, null, 2)}`)
 
-      // Set timestamp after mining
-      newBlock.setTimestamp(currentTimestamp)
-      newBlock.setDistance(solution.distance)
-      newBlock.setNonce(solution.nonce)
+          // Set timestamp after mining
+          newBlock.setTimestamp(currentTimestamp)
+          newBlock.setDistance(solution.distance)
+          newBlock.setNonce(solution.nonce)
 
-      return this._processMinedBlock(newBlock)
+          return this._processMinedBlock(newBlock)
+        }
+      })
+      this._workerThread.load(path.resolve(__filename, '../../bc/mine_worker.js'))
+      this._workerThread.emit('mine')//, currentTimestamp, this._minerKey, newBlock.getMerkleRoot(), newBlock.getDifficulty())
     } else {
       if (!this._canMine) {
         this._logger.info(`Not mining because not collected enough blocks from all chains yet - ${JSON.stringify(this._collectedBlocks, null, 2)}`)
