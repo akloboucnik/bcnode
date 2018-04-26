@@ -8,18 +8,64 @@ extern crate log;
 
 extern crate env_logger;
 extern crate protobuf;
+extern crate rand;
+extern crate bcrypt;
 
 use bcrust_core::miner;
 use bcrust_core::protos::miner::*;
 
 use neon::vm::{Call, JsResult, Lock};
-use neon::js::JsBoolean;
-use neon::js::JsString;
+use neon::scope::{Scope};
+use neon::js::{JsUndefined, JsFunction, JsBoolean, JsString};
 use neon::js::binary::JsBuffer;
 use neon::mem::Handle;
+use neon::task::Task;
+use rand::Rng;
+use bcrypt::{DEFAULT_COST};
+
+use std::time::{Instant};
 
 use protobuf::core::parse_from_bytes;
 use protobuf::Message;
+
+struct MiningTask;
+
+impl Task for MiningTask {
+    type Output = String;
+    type Error = String;
+    type JsEvent = JsString;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        let start = Instant::now();
+        let mut hashed;
+        loop {
+            let rstr: String = rand::thread_rng()
+                .gen_ascii_chars()
+                .take(64)
+                .collect();
+
+            hashed = match bcrypt::hash(rstr.as_str(), DEFAULT_COST) {
+                Ok(res) => res,
+                Err(err) => "error".to_string()
+            };
+
+            if start.elapsed().as_secs() > 10 {
+                break;
+            }
+        }
+        Ok(hashed)
+    }
+
+    fn complete<'a, T: Scope<'a>>(self, scope: &'a mut T, result: Result<Self::Output, Self::Error>) -> JsResult<Self::JsEvent> {
+        Ok(JsString::new(scope, result.unwrap().as_str()).unwrap())
+    }
+}
+
+fn mine_async(call: Call) -> JsResult<JsUndefined> {
+    let f = call.arguments.require(call.scope, 0)?.check::<JsFunction>()?;
+    MiningTask.schedule(f);
+    Ok(JsUndefined::new())
+}
 
 fn init_logger(call: Call) -> JsResult<JsBoolean> {
     let scope = call.scope;
@@ -63,10 +109,13 @@ fn mine(call: Call) -> JsResult<JsBuffer> {
     Ok(buffer)
 }
 
+
+
 register_module!(m, {
     m.export("hello", hello)?;
     m.export("initLogger", init_logger)?;
     m.export("mine", mine)?;
+    m.export("mine_async", mine_async)?;
 
     Ok(())
 });
