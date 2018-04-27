@@ -10,6 +10,8 @@
 const execSync = require('child_process').execSync
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
+const { sort } = require('ramda')
 
 const { objFromFileSync, objToFileSync } = require('../helper/json')
 
@@ -25,6 +27,8 @@ const DEFAULT_VERSION: Object = {
   git: '<unknown>',
   npm: '<unknown>'
 }
+
+const PROTO_FILE_DIR = path.resolve(__dirname, '..', '..', 'protos')
 
 /**
  * Generate version object
@@ -102,4 +106,22 @@ export const readVersionFile = (path: string = VERSION_FILE_PATH) => {
 export function writeVersionFile (path: string = VERSION_FILE_PATH, version: ?Object = null) {
   // $FlowFixMe
   return objToFileSync(VERSION_FILE_PATH, version || getVersion(path))
+}
+
+export function getProtoFilesHash (dir: string = PROTO_FILE_DIR) {
+  const files = fs.readdirSync(dir).map(f => path.resolve(dir, f))
+
+  const fileLines = sort((a, b) => a.localeCompare(b), files.map(protoFileToString))
+  const fileContents = fileLines.join('')
+  const hash = crypto.createHash('sha256')
+  hash.update(fileContents)
+  return hash.digest('hex')
+}
+
+function protoFileToString (fileName: string): string {
+  return fs.readFileSync(fileName, { encoding: 'utf8' })
+    .split('\n')
+    .filter(line => line !== '')
+    .map(line => line.trim())
+    .join('')
 }
